@@ -55,17 +55,20 @@ export const createJob = async (req, res) => {
   }
 };
 
-
 export const getAllJobs = async (req, res) => {
   try {
     const [rows] = await pool.query(`
       SELECT 
         j.id,
         j.title,
+        j.salary_min,
+        j.salary_max,
+        j.responsibilities,
+        j.updated_at,
         c.name AS company,
         COALESCE(c.logo_url, '/uploads/logos/default-logo.png') AS logo, -- Fetch logo_url from companies
         j.location,
-        CONCAT('$', FORMAT(j.salary_min, 0), '-$', FORMAT(j.salary_max, 0)) AS salary,
+        CONCAT( FORMAT(j.salary_min, 0), '-', FORMAT(j.salary_max, 0)) AS salary,
         j.employment_type AS type,
         JSON_UNQUOTE(j.description) AS description -- Parse JSON description
       FROM jobs j
@@ -77,7 +80,7 @@ export const getAllJobs = async (req, res) => {
     console.error("Error fetching jobs:", error);
     res.status(500).json({ message: "Error fetching jobs", error: error.message });
   }
-}
+};
 export const getJobById = async (req, res) => {
   try {
     const { id } = req.params;
@@ -121,7 +124,6 @@ export const getJobById = async (req, res) => {
     res.status(500).json({ message: "Error fetching job", error: error.message });
   }
 };
-
 const SORT_FIELD_MAP = {
   createdAt: 'j.created_at',
   title: 'j.title',
@@ -130,7 +132,6 @@ const SORT_FIELD_MAP = {
   experienceMin: 'j.experience_min',
   experienceMax: 'j.experience_max'
 };
-
 export const getAllJobsFilter = async (req, res) => {
    try {
     const { page = 1, jobsPerPage = 50 } = req.body || {};
@@ -143,8 +144,6 @@ export const getAllJobsFilter = async (req, res) => {
     return res.status(500).json({ message: err.message });
   }
 };
-
-
 export const updateJob = async (req, res) => {
   try {
     const jobId = req.params.id;
@@ -198,8 +197,6 @@ export const updateJob = async (req, res) => {
     res.status(500).json({ message: 'Server error while updating job' });
   }
 };
-
-
 export const deleteJob = async (req, res) => {
   try {
     const jobId = req.params.id;

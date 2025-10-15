@@ -2,14 +2,17 @@
 
 import pool from "../config/db.js";
 
-// Get all categories
+
 export const getAllCategories = async (req, res) => {
   try {
-    const [rows] = await pool.query(`
-      SELECT id, industry_id, name
-      FROM categories
-      ORDER BY name ASC
-    `);
+     const [rows] = await pool.query(`
+   SELECT c.id, c.industry_id, c.name, COUNT(j.id) AS job_count
+  FROM categories c
+  JOIN jobs j ON c.id = j.category_id
+  WHERE c.name IN ('Development', 'Accounting')
+  GROUP BY c.id, c.industry_id, c.name
+  ORDER BY c.name ASC
+`);
 
     res.status(200).json(rows);
   } catch (error) {
@@ -21,10 +24,8 @@ export const getAllCategories = async (req, res) => {
   }
 };
 
-
 export const getJobsByCategorySlug = async (req, res) => {
   try {
-    // console.log("backend")
     const { categorySlug } = req.params;
     const city = req.query.city || "";
 
