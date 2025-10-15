@@ -66,10 +66,14 @@ export const getAllJobs = async (req, res) => {
       SELECT 
         j.id,
         j.title,
+        j.salary_min,
+        j.salary_max,
+        j.responsibilities,
+        j.updated_at,
         c.name AS company,
         COALESCE(c.logo_url, '/uploads/logos/default-logo.png') AS logo, -- Fetch logo_url from companies
         j.location,
-        CONCAT('$', FORMAT(j.salary_min, 0), '-$', FORMAT(j.salary_max, 0)) AS salary,
+        CONCAT( FORMAT(j.salary_min, 0), '-', FORMAT(j.salary_max, 0)) AS salary,
         j.employment_type AS type,
         JSON_UNQUOTE(j.description) AS description -- Parse JSON description
       FROM jobs j
@@ -83,6 +87,7 @@ export const getAllJobs = async (req, res) => {
       .status(500)
       .json({ message: "Error fetching jobs", error: error.message });
   }
+};
 };
 export const getJobById = async (req, res) => {
   try {
