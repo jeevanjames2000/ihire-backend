@@ -52,8 +52,8 @@ router.post("/createJob", createJob);
 router.get("/getAllJobs", getAllJobs);
 router.get("/getJobById", getJobById);
 router.post("/all", getAllJobsFilter);
-router.put("/:id", updateJob);
-router.delete("/:id", deleteJob);
+router.put('/updatejob/:id', updateJob);        
+router.delete('/deletejobs/:id', deleteJob);
 router.post("/createDynamicForm", jobDynamicForm);
 router.get("/getJobDynamicForm", getJobDynamicForm);
 router.post(

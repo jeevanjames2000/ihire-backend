@@ -10,6 +10,13 @@ import industryRoutes from "./routes/industryRoutes.js";
 import qualificationRoutes from "./routes/qualificationRoutes.js";
 import categoryRoutes from "./routes/categoryRoutes.js";
 
+
+
+
+import userRoutes from "./routes/userRoutes.js"
+
+
+
 const app = express();
 
 app.use(express.json());
@@ -29,6 +36,14 @@ app.use("/api/industries", authenticate, industryRoutes);
 app.use("/api/invites", authenticate, invitesRoutes);
 app.use("/api/qualifications", authenticate, qualificationRoutes);
 app.use("/api/categories", categoryRoutes);
+
+
+
+
+app.use("/api/user",userRoutes)
+
+
+
 
 app.get("/", (req, res) => {
   res.send("Express server is running ");
