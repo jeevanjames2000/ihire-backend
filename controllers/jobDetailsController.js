@@ -88,7 +88,7 @@ export const getAllJobs = async (req, res) => {
       .json({ message: "Error fetching jobs", error: error.message });
   }
 };
-};
+
 export const getJobById = async (req, res) => {
   try {
     const { id } = req.query;
