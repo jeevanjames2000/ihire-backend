@@ -88,52 +88,150 @@ export const getAllJobs = async (req, res) => {
       .json({ message: "Error fetching jobs", error: error.message });
   }
 };
+export const getJobsBySearch = async (req, res) => {
+  try {
+    const { query } = req.query;
+
+    let sql = `
+      SELECT 
+        j.id,
+        j.title,
+        j.role,
+        j.salary_min,
+        j.salary_max,
+        j.responsibilities,
+        j.updated_at,
+        c.name AS company,
+        COALESCE(c.logo_url, '/uploads/logos/default-logo.png') AS logo,
+        j.location,
+        CONCAT(FORMAT(j.salary_min, 0), '-', FORMAT(j.salary_max, 0)) AS salary,
+        j.employment_type AS type,
+        JSON_UNQUOTE(j.description) AS description,
+        i.name AS industry,
+        cat.name AS category,
+        subcat.name AS subcategory
+      FROM jobs j
+      LEFT JOIN companies c ON j.company_id = c.id
+      LEFT JOIN industries i ON j.industry_id = i.id
+      LEFT JOIN categories cat ON j.category_id = cat.id
+      LEFT JOIN subcategories subcat ON j.subcategory_id = subcat.id
+    `;
+
+    const params = [];
+
+    if (query && query.trim()) {
+      const searchTerm = `%${query.toLowerCase().trim()}%`;
+      sql += `
+        WHERE 
+          LOWER(j.title) LIKE ? 
+          OR LOWER(j.role) LIKE ?
+          OR LOWER(c.name) LIKE ?
+          OR LOWER(i.name) LIKE ?
+          OR LOWER(cat.name) LIKE ?
+          OR LOWER(subcat.name) LIKE ?
+      `;
+      params.push(
+        searchTerm,
+        searchTerm,
+        searchTerm,
+        searchTerm,
+        searchTerm,
+        searchTerm
+      );
+    }
+
+    sql += " ORDER BY j.created_at DESC";
+
+    const [rows] = await pool.query(sql, params);
+
+    // Similar jobs - top 5 from same category
+    let similarJobs = [];
+    if (rows.length > 0) {
+      [similarJobs] = await pool.query(
+        `
+        SELECT 
+          j.id,
+          j.title,
+          c.name AS company,
+          j.location,
+          CONCAT(FORMAT(j.salary_min, 0), '-', FORMAT(j.salary_max, 0)) AS salary,
+          j.employment_type AS type
+        FROM jobs j
+        LEFT JOIN companies c ON j.company_id = c.id
+        WHERE j.category_id = ?
+        AND j.id != ?
+        LIMIT 5
+      `,
+        [rows[0].category_id, rows[0].id]
+      );
+    }
+
+    res.status(200).json({ jobs: rows, similar: similarJobs || [] });
+  } catch (error) {
+    console.error("Error fetching jobs by search:", error);
+    res
+      .status(500)
+      .json({ message: "Error fetching jobs", error: error.message });
+  }
+};
 
 export const getJobById = async (req, res) => {
   try {
     const { id } = req.query;
     const [rows] = await pool.query(
       `
-  SELECT 
-    j.id,
-    j.title,
-    c.name AS company,
-    COALESCE(c.logo_url, '/uploads/logos/default-logo.png') AS logo,
-    j.location,
-    CONCAT('$', FORMAT(j.salary_min, 0), '-$', FORMAT(j.salary_max, 0)) AS salary,
-    j.employment_type AS type,
-    JSON_UNQUOTE(j.description) AS description,
-    j.responsibilities,
-    j.education,
-    j.qualification_category,
-    j.qualification_subcategory,
-    COALESCE(i.name, 'General') AS category
-  FROM jobs j
-  LEFT JOIN companies c ON j.company_id = c.id
-  LEFT JOIN industries i ON j.industry_id = i.id
-  WHERE j.id = ?
-`,
+      SELECT 
+        j.id,
+        j.title,
+        c.name AS company,
+        COALESCE(c.logo_url, '/uploads/logos/default-logo.png') AS logo,
+        j.location,
+        CONCAT('$', FORMAT(j.salary_min, 0), '-$', FORMAT(j.salary_max, 0)) AS salary,
+        j.employment_type AS type,
+        j.description,
+        j.responsibilities,
+        j.education,
+        j.qualification_category,
+        j.qualification_subcategory,
+        COALESCE(i.name, 'General') AS category
+      FROM jobs j
+      LEFT JOIN companies c ON j.company_id = c.id
+      LEFT JOIN industries i ON j.industry_id = i.id
+      WHERE j.id = ?
+      `,
       [id]
     );
+
     if (rows.length === 0) {
       return res.status(404).json({ message: "Job not found" });
     }
+
+    // Parse description safely
+    let parsedDescription = "";
+    try {
+      const descObj = JSON.parse(rows[0].description);
+      parsedDescription = descObj.html || descObj.summary || "";
+    } catch {
+      parsedDescription = rows[0].description || "";
+    }
+
     const job = {
       ...rows[0],
       responsibilities: rows[0].responsibilities || "",
       qualifications: rows[0].qualifications || "",
-      description: rows[0].description
-        ? JSON.parse(rows[0].description).html || ""
-        : "",
+      description: parsedDescription,
     };
+
     res.status(200).json(job);
   } catch (error) {
     console.error("Error fetching job:", error);
-    res
-      .status(500)
-      .json({ message: "Error fetching job", error: error.message });
+    res.status(500).json({
+      message: "Error fetching job",
+      error: error.message,
+    });
   }
 };
+
 const SORT_FIELD_MAP = {
   createdAt: "j.created_at",
   title: "j.title",

@@ -1,5 +1,5 @@
-import nodemailer from 'nodemailer';
-import dotenv from 'dotenv';
+import nodemailer from "nodemailer";
+import dotenv from "dotenv";
 
 dotenv.config();
 
@@ -14,7 +14,7 @@ const sendInviteEmail = async (to, inviteLink, companyName, role) => {
       },
     });
 
-      const mailOptions = {
+    const mailOptions = {
       from: '"Your App" <no-reply@yourapp.com>',
       to,
       subject: `Invitation to join ${companyName} as ${role}`,
@@ -22,15 +22,16 @@ const sendInviteEmail = async (to, inviteLink, companyName, role) => {
         <p>You have been invited to join ${companyName} as a ${role}.</p>
         <p>Please click the link below to accept the invitation:</p>
         <a href="${inviteLink}">${inviteLink}</a>
-        <p>This link will expire on ${new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toLocaleString()}.</p>
+        <p>This link will expire on ${new Date(
+          Date.now() + 7 * 24 * 60 * 60 * 1000
+        ).toLocaleString()}.</p>
       `,
     };
 
     await transporter.sendMail(mailOptions);
-    console.log('Invite email sent to:', to, 'with link:', inviteLink);
     return true;
   } catch (error) {
-    console.error('Error sending invite email:', error);
+    console.error("Error sending invite email:", error);
     return false;
   }
 };

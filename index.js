@@ -16,7 +16,7 @@ import categoryRoutes from "./routes/categoryRoutes.js";
 import userRoutes from "./routes/userRoutes.js"
 
 
-
+import companyRoutes from "./routes/companyRoutes.js";
 const app = express();
 
 app.use(express.json());
@@ -44,7 +44,7 @@ app.use("/api/user",userRoutes)
 
 
 
-
+app.use("/api/companies", companyRoutes);
 app.get("/", (req, res) => {
   res.send("Express server is running ");
 });
