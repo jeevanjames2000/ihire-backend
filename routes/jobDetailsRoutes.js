@@ -11,6 +11,7 @@ import {
   createAndSubmitApplication,
   getApplicationResponses,
   getApplicationsByJob,
+  getJobsBySearch,
 } from "../controllers/jobDetailsController.js";
 import fs from "fs";
 import path from "path";
@@ -50,6 +51,7 @@ const upload = multer({
 const router = express.Router();
 router.post("/createJob", createJob);
 router.get("/getAllJobs", getAllJobs);
+router.get("/getJobsBySearch", getJobsBySearch);
 router.get("/getJobById", getJobById);
 router.post("/all", getAllJobsFilter);
 router.put("/:id", updateJob);
