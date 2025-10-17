@@ -34,9 +34,8 @@ app.use("/api/recruiter", authenticate, recruiterRoutes);
 app.use("/api/jobs", jobDetailsRoutes);
 app.use("/api/industries", authenticate, industryRoutes);
 app.use("/api/invites", authenticate, invitesRoutes);
-app.use("/api/qualifications", authenticate, qualificationRoutes);
+app.use("/api/qualifications", qualificationRoutes);
 app.use("/api/categories", categoryRoutes);
-
 
 
 

@@ -49,7 +49,7 @@ export const userLogin = async (req, res) => {
   const connection = await pool.getConnection();
   try {
     const [users] = await connection.query(
-      "SELECT id, email, password FROM users WHERE email = ?",
+      "SELECT id, email,name, password FROM users WHERE email = ?",
       [email]
     );
     if (users.length === 0) {
@@ -76,7 +76,7 @@ export const userLogin = async (req, res) => {
     res.status(200).json({
       message: "Login successful",
       token,
-      user: { id: user.id, email: user.email },
+      user: { id: user.id, email: user.email  ,name:user?.name},
     });
   } catch (error) {
     console.error("Login error:", error);
@@ -87,136 +87,451 @@ export const userLogin = async (req, res) => {
 };
 
 export const userLogout = async (req, res) => {
-  const authHeader = req.headers.authorization;
-  const token = authHeader.split(" ")[1];
-
   try {
-    const decoded = jwt.verify(token, JWT_SECRET);
-    const expiresAt = new Date(decoded.exp * 1000);
+    res.clearCookie('token', { httpOnly: true, secure: process.env.NODE_ENV === 'production' });
 
-    await pool.query(
-      "INSERT INTO blacklisted_tokens (token, expires_at) VALUES (?, ?)",
-      [token, expiresAt]
-    );
-    res.status(200).json({ message: "Logout successful" });
+    res.status(200).json({ message: 'Logged out successfully' });
   } catch (error) {
-    console.error("Logout error:", error);
-    res.status(500).json({ message: "Failed to logout" });
+    console.error('Logout error:', error);
+    res.status(500).json({ message: 'Failed to logout' });
   }
 };
 
-export const userProfile=async(req,res)=>{
-  try {
-    const { id } = req.params;
-    if (!id) {
-      return res.status(400).json({ error: "User ID is required" });
-    }
-    const [rows] = await pool.query(
-      "SELECT * FROM users WHERE id = ?",
-      [id]
-    );
+export const userProfile = async (req, res) => {
+  const { id } = req.params;
+  const authHeader = req.headers.authorization;
 
-    if (rows.length === 0) {
-      return res.status(404).json({ error: "User not found" });
-    }
-
-    return res.status(200).json(rows[0]);
-  } catch (error) {
-    console.error("Error fetching user profile:", error);
-    return res.status(500).json({ error: "Internal Server Error" });
+  if (!authHeader) {
+    return res.status(401).json({ message: "Unauthorized" });
   }
-}
+
+  const token = authHeader.split(" ")[1];
+  try {
+    const connection = await pool.getConnection();
+    try {
+      const [userRows] = await connection.query(
+        `SELECT * FROM users WHERE id = ? AND is_active = 1`,
+        [id]
+      );
+      if (!userRows.length) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      const [projectRows] = await connection.query(
+        `SELECT * FROM projects WHERE user_id = ?`,
+        [id]
+      );
+      const [languageRows] = await connection.query(
+        `SELECT * FROM user_languages WHERE user_id = ?`,
+        [id]
+      );
+      const [educationRows] = await connection.query(
+        `SELECT id, qualification_category, qualification_subcategory, university, course_type, grading_system, score, start_year, end_year FROM user_education WHERE user_id = ?`,
+        [id]
+      );
+      const [experienceRows] = await connection.query(
+        `SELECT * FROM user_experience WHERE user_id = ?`,
+        [id]
+      );
+
+      const user = {
+        ...userRows[0],
+        projects: projectRows,
+        languages: languageRows,
+        education: educationRows.map((edu) => ({
+          id: edu.id,
+          qualification_category: edu.qualification_category || "",
+          qualification_subcategory: edu.qualification_subcategory || "",
+          university: edu.university || "",
+          course_type: edu.course_type || "",
+          grading_system: edu.grading_system || "",
+          score: edu.score || "",
+          start_year: edu.start_year || "",
+          end_year: edu.end_year || "",
+        })),
+        experiences: experienceRows,
+      };
+
+      res.status(200).json(user);
+    } finally {
+      connection.release();
+    }
+  } catch (error) {
+    console.error("Error fetching profile:", error);
+    res.status(500).json({ message: "Failed to fetch profile", error: error.message });
+  }
+};
+
+// export const userProfileUpdate = async (req, res) => {
+//   const { id } = req.params;
+//   const {
+//     phone,
+//     address,
+//     date_of_birth,
+//     gender,
+//     profile_picture,
+//     resume,
+//     resume_headline,
+//     career_profile,
+//     certifications,
+//     skills,
+//     experience,
+//     job_preferences,
+//     notification_settings,
+//     projects,
+//     languages,
+//     education, // Add education to the request body
+//   } = req.body;
+
+//   const authHeader = req.headers.authorization;
+
+//   if (!authHeader) {
+//     return res.status(401).json({ message: "Unauthorized" });
+//   }
+
+//   const token = authHeader.split(" ")[1];
+//   try {
+//     const connection = await pool.getConnection();
+//     try {
+//       await connection.beginTransaction();
+
+//       // Validate gender
+//       const validGenders = ["male", "female", "other", "prefer_not_to_say"];
+//       if (gender && !validGenders.includes(gender)) {
+//         console.error("Invalid gender value:", gender);
+//         await connection.rollback();
+//         return res.status(400).json({ message: "Invalid gender value" });
+//       }
+
+//       // Validate and format date_of_birth
+//       let formattedDate = null;
+//       if (date_of_birth) {
+//         const date = new Date(date_of_birth);
+//         if (isNaN(date.getTime())) {
+//           console.error("Invalid date_of_birth:", date_of_birth);
+//           await connection.rollback();
+//           return res.status(400).json({ message: "Invalid date format for date_of_birth" });
+//         }
+//         formattedDate = date.toISOString().split("T")[0];
+//         console.log("Formatted date_of_birth:", formattedDate);
+//       }
+
+//       // Update user profile
+//       await connection.query(
+//         `UPDATE users SET
+//           phone = ?, address = ?, date_of_birth = ?, gender = ?,
+//           profile_picture = ?, resume = ?, resume_headline = ?,
+//           career_profile = ?, certifications = ?, skills = ?,
+//           experience = ?, job_preferences = ?,
+//           notification_settings = ?, updated_at = CURRENT_TIMESTAMP
+//         WHERE id = ? AND is_active = 1`,
+//         [
+//           phone || null,
+//           address || null,
+//           formattedDate,
+//           gender || null,
+//           profile_picture || null,
+//           resume || null,
+//           resume_headline || null,
+//           career_profile || null,
+//           certifications || null,
+//           skills || null,
+//           experience || null,
+//           job_preferences || null,
+//           notification_settings || "email",
+//           id,
+//         ]
+//       );
+
+//       // Delete existing education records
+//       await connection.query("DELETE FROM user_education WHERE user_id = ?", [id]);
+
+//       // Insert new education records
+//       if (education && education.length > 0) {
+//         const educationValues = education.map((edu) => [
+//           id,
+//           edu.qualification_category || null,
+//           edu.qualification_subcategory || null,
+//           edu.university || null,
+//           edu.course_type || null,
+//           edu.grading_system || null,
+//           edu.score || null,
+//           edu.start_year || null,
+//           edu.end_year || null,
+//         ]);
+//         await connection.query(
+//           `INSERT INTO user_education (
+//             user_id, qualification_category, qualification_subcategory,
+//             university, course_type, grading_system, score,
+//             start_year, end_year
+//           ) VALUES ?`,
+//           [educationValues]
+//         );
+//       }
+
+//       // Delete existing projects
+//       await connection.query("DELETE FROM projects WHERE user_id = ?", [id]);
+
+//       // Insert new projects
+//       if (projects && projects.length > 0) {
+//         const projectValues = projects.map((p) => [
+//           id,
+//           p.project_title,
+//           p.associated_with || null,
+//           p.client || null,
+//           p.project_status,
+//           p.start_year || null,
+//           p.start_month || null,
+//           p.end_year || null,
+//           p.end_month || null,
+//           p.description || null,
+//           p.project_location || null,
+//           p.project_site || null,
+//           p.employment_nature || null,
+//           p.team_size || null,
+//           p.role || null,
+//           p.role_description || null,
+//           p.skills_used || null,
+//         ]);
+//         await connection.query(
+//           `INSERT INTO projects (
+//             user_id, project_title, associated_with, client, project_status,
+//             start_year, start_month, end_year, end_month, description,
+//             project_location, project_site, employment_nature, team_size,
+//             role, role_description, skills_used
+//           ) VALUES ?`,
+//           [projectValues]
+//         );
+//       }
+
+//       // Delete existing languages
+//       await connection.query("DELETE FROM user_languages WHERE user_id = ?", [id]);
+
+//       // Insert new languages
+//       if (languages && languages.length > 0) {
+//         const languageValues = languages.map((l) => [id, l.language, l.proficiency]);
+//         await connection.query(
+//           `INSERT INTO user_languages (user_id, language, proficiency) VALUES ?`,
+//           [languageValues]
+//         );
+//       }
+
+//       await connection.commit();
+//       console.log("Profile updated for user:", id, { date_of_birth: formattedDate, gender, education });
+//       res.status(200).json({ message: "Profile updated successfully" });
+//     } catch (error) {
+//       await connection.rollback();
+//       console.error("Error updating profile:", error);
+//       res.status(500).json({ message: "Failed to update profile", error: error.message });
+//     } finally {
+//       connection.release();
+//     }
+//   } catch (error) {
+//     console.error("Token verification failed:", error);
+//     res.status(401).json({ message: "Invalid or expired token" });
+//   }
+// };
 export const userProfileUpdate = async (req, res) => {
   const { id } = req.params;
-  const { profile, languages, projects } = req.body;
-  const connection = await pool.getConnection();
+  const {
+    phone,
+    address,
+    date_of_birth,
+    gender,
+    profile_picture,
+    resume,
+    resume_headline,
+    career_profile,
+    certifications,
+    skills,
+    experiences, // Add experiences to the request body
+    job_preferences,
+    notification_settings,
+    projects,
+    languages,
+    education,
+  } = req.body;
 
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader) {
+    return res.status(401).json({ message: "Unauthorized" });
+  }
+
+  const token = authHeader.split(" ")[1];
   try {
-    await connection.beginTransaction();
+    const connection = await pool.getConnection();
+    try {
+      await connection.beginTransaction();
 
-    await connection.query(
-      `UPDATE users SET 
-        phone = ?, address = ?, date_of_birth = ?, gender = ?, 
-        profile_picture = ?, resume = ?, resume_headline = ?, 
-        career_profile = ?, certifications = ?, skills = ?, 
-        education = ?, experience = ?, job_preferences = ?, 
-        notification_settings = ?
-      WHERE id = ?`,
-      [
-        profile.phone || null,
-        profile.address || null,
-        profile.date_of_birth || null,
-        profile.gender || null,
-        profile.profile_picture || null,
-        profile.resume || null,
-        profile.resume_headline || null,
-        profile.career_profile || null,
-        profile.certifications || null,
-        profile.skills || null,
-        profile.education || null,
-        profile.experience || null,
-        profile.job_preferences || null,
-        profile.notification_settings || "email",
-        id,
-      ]
-    );
+      // Validate gender
+      const validGenders = ["male", "female", "other", "prefer_not_to_say"];
+      if (gender && !validGenders.includes(gender)) {
+        console.error("Invalid gender value:", gender);
+        await connection.rollback();
+        return res.status(400).json({ message: "Invalid gender value" });
+      }
 
-    await connection.query("DELETE FROM user_languages WHERE user_id = ?", [
-      id,
-    ]);
-    for (const { language, proficiency } of languages) {
-      if (language && proficiency) {
+      // Validate and format date_of_birth
+      let formattedDate = null;
+      if (date_of_birth) {
+        const date = new Date(date_of_birth);
+        if (isNaN(date.getTime())) {
+          console.error("Invalid date_of_birth:", date_of_birth);
+          await connection.rollback();
+          return res.status(400).json({ message: "Invalid date format for date_of_birth" });
+        }
+        formattedDate = date.toISOString().split("T")[0];
+        console.log("Formatted date_of_birth:", formattedDate);
+      }
+
+      // Update user profile (remove experience from users table)
+      await connection.query(
+        `UPDATE users SET
+          phone = ?, address = ?, date_of_birth = ?, gender = ?,
+          profile_picture = ?, resume = ?, resume_headline = ?,
+          career_profile = ?, certifications = ?, skills = ?,
+          job_preferences = ?, notification_settings = ?, updated_at = CURRENT_TIMESTAMP
+        WHERE id = ? AND is_active = 1`,
+        [
+          phone || null,
+          address || null,
+          formattedDate,
+          gender || null,
+          profile_picture || null,
+          resume || null,
+          resume_headline || null,
+          career_profile || null,
+          certifications || null,
+          skills || null,
+          job_preferences || null,
+          notification_settings || "email",
+          id,
+        ]
+      );
+
+      // Delete existing experience records
+      await connection.query("DELETE FROM user_experience WHERE user_id = ?", [id]);
+
+      // Insert new experience records
+      if (experiences && experiences.length > 0) {
+        const experienceValues = experiences.map((exp) => [
+          id,
+          exp.is_fresher || 0,
+          exp.company_name || null,
+          exp.designation || null,
+          exp.location || null,
+          exp.start_date ? `${exp.start_date}-01` : null, // Convert YYYY-MM to YYYY-MM-DD
+          exp.end_date ? `${exp.end_date}-01` : null, // Convert YYYY-MM to YYYY-MM-DD
+          exp.responsibilities || null,
+        ]);
         await connection.query(
-          "INSERT INTO user_languages (user_id, language, proficiency) VALUES (?, ?, ?)",
-          [id, language, proficiency]
+          `INSERT INTO user_experience (
+            user_id, is_fresher, company_name, designation,
+            location, start_date, end_date, responsibilities
+          ) VALUES ?`,
+          [experienceValues]
+        );
+      } else {
+        // Insert a fresher record if is_fresher is true
+        if (experiences && experiences.is_fresher) {
+          await connection.query(
+            `INSERT INTO user_experience (
+              user_id, is_fresher
+            ) VALUES (?, ?)`,
+            [id, 1]
+          );
+        }
+      }
+
+      // Delete existing education records
+      await connection.query("DELETE FROM user_education WHERE user_id = ?", [id]);
+
+      // Insert new education records
+      if (education && education.length > 0) {
+        const educationValues = education.map((edu) => [
+          id,
+          edu.qualification_category || null,
+          edu.qualification_subcategory || null,
+          edu.university || null,
+          edu.course_type || null,
+          edu.grading_system || null,
+          edu.score || null,
+          edu.start_year || null,
+          edu.end_year || null,
+        ]);
+        await connection.query(
+          `INSERT INTO user_education (
+            user_id, qualification_category, qualification_subcategory,
+            university, course_type, grading_system, score,
+            start_year, end_year
+          ) VALUES ?`,
+          [educationValues]
         );
       }
-    }
 
-    await connection.query("DELETE FROM projects WHERE user_id = ?", [id]);
-    for (const project of projects) {
-      if (project.project_title && project.project_status) {
+      // Delete existing projects
+      await connection.query("DELETE FROM projects WHERE user_id = ?", [id]);
+
+      // Insert new projects
+      if (projects && projects.length > 0) {
+        const projectValues = projects.map((p) => [
+          id,
+          p.project_title,
+          p.associated_with || null,
+          p.client || null,
+          p.project_status,
+          p.start_year || null,
+          p.start_month || null,
+          p.end_year || null,
+          p.end_month || null,
+          p.description || null,
+          p.project_location || null,
+          p.project_site || null,
+          p.employment_nature || null,
+          p.team_size || null,
+          p.role || null,
+          p.role_description || null,
+          p.skills_used || null,
+        ]);
         await connection.query(
           `INSERT INTO projects (
-            user_id, project_title, associated_with, client, project_status, 
-            start_year, start_month, end_year, end_month, description, 
-            project_location, project_site, employment_nature, team_size, 
+            user_id, project_title, associated_with, client, project_status,
+            start_year, start_month, end_year, end_month, description,
+            project_location, project_site, employment_nature, team_size,
             role, role_description, skills_used
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [
-            id,
-            project.project_title,
-            project.associated_with || null,
-            project.client || null,
-            project.project_status,
-            project.start_year || null,
-            project.start_month || null,
-            project.end_year || null,
-            project.end_month || null,
-            project.description || null,
-            project.project_location || null,
-            project.project_site || null,
-            project.employment_nature || null,
-            project.team_size || null,
-            project.role || null,
-            project.role_description || null,
-            project.skills_used || null,
-          ]
+          ) VALUES ?`,
+          [projectValues]
         );
       }
-    }
 
-    await connection.commit();
-    res.status(200).json({ message: "Profile updated successfully" });
+      // Delete existing languages
+      await connection.query("DELETE FROM user_languages WHERE user_id = ?", [id]);
+
+      // Insert new languages
+      if (languages && languages.length > 0) {
+        const languageValues = languages.map((l) => [id, l.language, l.proficiency]);
+        await connection.query(
+          `INSERT INTO user_languages (user_id, language, proficiency) VALUES ?`,
+          [languageValues]
+        );
+      }
+
+      await connection.commit();
+      console.log("Profile updated for user:", id, { date_of_birth: formattedDate, gender, experiences, education });
+      res.status(200).json({ message: "Profile updated successfully" });
+    } catch (error) {
+      await connection.rollback();
+      console.error("Error updating profile:", error);
+      res.status(500).json({ message: "Failed to update profile", error: error.message });
+    } finally {
+      connection.release();
+    }
   } catch (error) {
-    await connection.rollback();
-    console.error("Error updating profile:", error);
-    res.status(500).json({ message: "Failed to update profile" });
-  } finally {
-    connection.release();
+    console.error("Token verification failed:", error);
+    res.status(401).json({ message: "Invalid or expired token" });
   }
 };
-
 export const getSavedJobs=async (req, res) => {
   const user_id = req.userId;
 
